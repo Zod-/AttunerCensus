@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Generated assets (rebuilt by npm run build)
+src/icon.png
+src/rune-images/
+src/templates/
+src/charge-templates/
+
+# Staging screenshots — move to src/attuner-buffs/ after labeling
+src/captured-buffs/*.png
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+npm-debug.log*
