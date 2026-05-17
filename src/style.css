@@ -1,0 +1,317 @@
+/* ── Reset & base ──────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+	--bg:        #1a1a2e;
+	--surface:   #16213e;
+	--surface2:  #0f3460;
+	--accent:    #c084fc;
+	--gold:      #fbbf24;
+	--text:      #e2e8f0;
+	--muted:     #94a3b8;
+	--danger:    #f87171;
+	--choice:    #1e3a5f;
+	--cell-hi:   rgba(192, 132, 252, 0.25);
+}
+
+html, body {
+	background: var(--bg);
+	color: var(--text);
+	font-family: "Segoe UI", system-ui, sans-serif;
+	font-size: 13px;
+	height: 100%;
+}
+
+/* ── App shell ─────────────────────────────────────────────── */
+#app {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 8px;
+	min-width: 320px;
+}
+
+header h1 {
+	font-size: 15px;
+	font-weight: 700;
+	color: var(--accent);
+	letter-spacing: .5px;
+}
+
+#status {
+	font-size: 11px;
+	color: var(--muted);
+	min-height: 16px;
+}
+
+/* ── Controls ──────────────────────────────────────────────── */
+#controls {
+	display: flex;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+
+button {
+	background: var(--surface2);
+	color: var(--text);
+	border: 1px solid rgba(192,132,252,.4);
+	border-radius: 4px;
+	padding: 4px 10px;
+	font-size: 11px;
+	cursor: pointer;
+	transition: background .15s;
+}
+
+button:hover { background: rgba(192,132,252,.25); }
+
+#reset-btn { border-color: rgba(248,113,113,.4); }
+#reset-btn:hover { background: rgba(248,113,113,.2); }
+
+/* ── Charge control ────────────────────────────────────────── */
+#charge-control {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+
+.charge-label {
+	font-size: 11px;
+	color: var(--muted);
+}
+
+#charge-display {
+	font-size: 15px;
+	font-weight: 700;
+	color: var(--gold);
+	min-width: 22px;
+	text-align: center;
+}
+
+#charge-dec, #charge-inc {
+	padding: 2px 8px;
+	font-size: 13px;
+	line-height: 1;
+}
+
+/* ── Buff preview ──────────────────────────────────────────── */
+#buff-preview-section {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+
+#buff-previews {
+	display: flex;
+	gap: 4px;
+	flex-wrap: wrap;
+}
+
+.buff-thumb {
+	width: 54px;
+	height: 54px;
+	image-rendering: pixelated;
+	border: 1px solid rgba(255,255,255,.15);
+	border-radius: 4px;
+	background: rgba(0,0,0,.3);
+}
+
+.buff-thumb--matched {
+	border-color: var(--accent);
+	box-shadow: 0 0 4px rgba(192,132,252,.5);
+}
+
+.preview-label {
+	font-size: 9px;
+	color: var(--muted);
+}
+
+/* ── Stats ─────────────────────────────────────────────────── */
+#stats {
+	font-size: 11px;
+	color: var(--muted);
+}
+
+/* ── Table container ───────────────────────────────────────── */
+#table-container {
+	overflow-x: auto;
+	overflow-y: auto;
+	max-height: calc(100vh - 180px);
+}
+
+.hint {
+	color: var(--muted);
+	font-size: 11px;
+	padding: 8px 0;
+}
+
+/* ── Frequency table ───────────────────────────────────────── */
+table {
+	border-collapse: collapse;
+	min-width: 100%;
+}
+
+th, td {
+	border: 1px solid rgba(255,255,255,.08);
+	padding: 3px 6px;
+	text-align: center;
+	vertical-align: middle;
+	white-space: nowrap;
+}
+
+thead th {
+	position: sticky;
+	top: 0;
+	background: var(--surface);
+	z-index: 2;
+	font-weight: 600;
+	color: var(--accent);
+	font-size: 11px;
+}
+
+/* Level column */
+th.level-col, td.level-col {
+	position: sticky;
+	left: 0;
+	background: var(--surface);
+	z-index: 1;
+	font-weight: 700;
+	min-width: 38px;
+	color: var(--gold);
+}
+
+thead th.level-col { z-index: 3; }
+
+/* Rune header cell */
+.rune-header {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	min-width: 50px;
+}
+
+.rune-header img {
+	width: 27px;
+	height: 27px;
+	image-rendering: pixelated;
+}
+
+.rune-name {
+	font-size: 10px;
+	color: var(--text);
+	cursor: pointer;
+	max-width: 60px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.rune-name:hover { color: var(--accent); text-decoration: underline; }
+
+/* Data cells */
+td.has-data {
+	background: var(--cell-hi);
+}
+
+td.top-rune {
+	background: rgba(192,132,252,.45);
+	font-weight: 700;
+}
+
+.count { font-size: 13px; font-weight: 600; }
+
+.pct {
+	display: block;
+	font-size: 10px;
+	color: var(--muted);
+}
+
+/* Player-choice rows */
+tr.choice-row td {
+	background: var(--choice);
+}
+
+tr.choice-row td.level-col {
+	background: var(--choice);
+}
+
+.choice-badge {
+	display: inline-block;
+	background: var(--gold);
+	color: #000;
+	font-size: 9px;
+	font-weight: 700;
+	border-radius: 3px;
+	padding: 0 3px;
+	margin-left: 3px;
+	vertical-align: middle;
+}
+
+/* ── Debug log ─────────────────────────────────────────────── */
+#debug-section {
+	margin-top: 4px;
+	font-size: 11px;
+	color: var(--muted);
+}
+
+#debug-section summary {
+	cursor: pointer;
+	color: var(--muted);
+	font-size: 11px;
+}
+
+#debug-log {
+	margin-top: 4px;
+	max-height: 120px;
+	overflow-y: auto;
+	background: rgba(0,0,0,.3);
+	border-radius: 4px;
+	padding: 4px 6px;
+	font-family: monospace;
+	font-size: 10px;
+	line-height: 1.6;
+}
+
+#debug-log div { color: var(--muted); }
+#debug-log div:first-child { color: var(--text); }
+
+#debug-canvas-row {
+	display: flex;
+	gap: 8px;
+	margin: 4px 0;
+	align-items: flex-start;
+}
+
+.debug-canvas-label {
+	font-size: 9px;
+	color: var(--muted);
+	margin-bottom: 2px;
+}
+
+#debug-icon, #debug-ocr {
+	image-rendering: pixelated;
+	background: #000;
+	border: 1px solid rgba(255,255,255,.1);
+	border-radius: 2px;
+	display: block;
+}
+
+/* ── Legend ────────────────────────────────────────────────── */
+#legend {
+	margin-top: 4px;
+	font-size: 11px;
+	color: var(--muted);
+}
+
+#legend summary {
+	cursor: pointer;
+	color: var(--accent);
+	font-size: 11px;
+}
+
+#legend ul {
+	margin-top: 4px;
+	padding-left: 16px;
+	line-height: 1.7;
+}

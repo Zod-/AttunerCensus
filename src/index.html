@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Runic Attuner Tracker</title>
+</head>
+<body>
+	<div id="app">
+		<header>
+			<h1>Runic Attuner Tracker</h1>
+			<p id="status">Initializing...</p>
+		</header>
+
+		<div id="controls">
+			<button id="export-btn">Export JSON</button>
+			<button id="reset-btn">Reset Data</button>
+		</div>
+
+		<div id="charge-control">
+			<span class="charge-label">Manual charge:</span>
+			<button id="charge-dec" title="Decrease">−</button>
+			<span id="charge-display">1</span>
+			<button id="charge-inc" title="Increase">+</button>
+			<button id="log-btn" title="Record the current buff rune at this charge now">Log now</button>
+			<button id="save-btn" title="Save current buff icon to captured-buffs for manual labeling">Save buff</button>
+		</div>
+
+		<p id="stats"></p>
+
+		<div id="table-container">
+			<p class="hint">Waiting for the first Runic Attuner attunement...</p>
+		</div>
+
+		<div id="buff-preview-section">
+			<span class="preview-label">Detected buffs:</span>
+			<div id="buff-previews"></div>
+		</div>
+
+		<details id="debug-section">
+			<summary>Debug log <span id="poll-count"></span></summary>
+			<div id="debug-canvas-row">
+				<div>
+					<div class="debug-canvas-label">Icon (4×)</div>
+					<canvas id="debug-icon" width="108" height="108"></canvas>
+				</div>
+				<div>
+					<div class="debug-canvas-label">Charge region (8×)</div>
+					<canvas id="debug-ocr" width="112" height="88"></canvas>
+				</div>
+				<div>
+					<div class="debug-canvas-label">Rune template</div>
+					<canvas id="debug-rune-tmpl" width="100" height="100"></canvas>
+				</div>
+				<div>
+					<div class="debug-canvas-label">Rune match (green=pass, red=fail, yellow=skipped)</div>
+					<canvas id="debug-rune-diff" width="100" height="100"></canvas>
+				</div>
+			</div>
+			<div id="debug-canvas-row">
+				<div>
+					<div class="debug-canvas-label">Charge pixels (binarised)</div>
+					<canvas id="debug-charge-mini" width="100" height="60"></canvas>
+				</div>
+				<div>
+					<div class="debug-canvas-label">Best charge template</div>
+					<canvas id="debug-charge-tmpl" width="100" height="60"></canvas>
+				</div>
+				<div>
+					<div class="debug-canvas-label">Charge diff (green=hit, red=miss)</div>
+					<canvas id="debug-charge-diff" width="100" height="60"></canvas>
+				</div>
+			</div>
+			<div id="debug-log"></div>
+		</details>
+
+		<details id="legend">
+			<summary>How to use</summary>
+			<ul>
+				<li>Keep this app open while crafting runes.</li>
+				<li>The rune and charge level are detected automatically from the buff icon.</li>
+				<li>Charge levels marked <span class="choice-badge">C</span> are player-choice levels.</li>
+				<li>If charge detection fails, use − / + to set the charge manually, then <strong>Log now</strong>.</li>
+			</ul>
+		</details>
+	</div>
+	<script src="./main.js"></script>
+</body>
+</html>

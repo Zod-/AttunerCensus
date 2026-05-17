@@ -1,0 +1,14 @@
+{
+	"appName": "Runic Attuner Tracker",
+	"description": "Tracks rune frequency per charge level for the Runic Attuner",
+	"appUrl": "./index.html",
+	"configUrl": "./appconfig.json",
+	"iconUrl": "./icon.png",
+	"defaultWidth": 420,
+	"defaultHeight": 620,
+	"minWidth": 320,
+	"minHeight": 200,
+	"requestHandlers": [],
+	"activators": [],
+	"permissions": "pixel,overlay"
+}
