@@ -933,7 +933,7 @@ function renderHeatmap(): void {
 	const runes = vizActiveRunes();
 	if (!runes.length) return;
 	const ML = 52, MT = 18, CW = 7, CH = 15;
-	const W = ML + 49 * CW + 4, H = MT + runes.length * CH + 4;
+	const W = ML + 50 * CW + 4, H = MT + runes.length * CH + 4;
 	const ctx = getVizCtx("heatmap-container", W, H);
 	if (!ctx) return;
 
@@ -941,9 +941,9 @@ function renderHeatmap(): void {
 	ctx.fillRect(0, 0, W, H);
 
 	ctx.font = "9px monospace"; ctx.textAlign = "center"; ctx.fillStyle = "#64748b";
-	for (let c = 1; c <= 49; c++)
-		if (c === 1 || c % 7 === 0)
-			ctx.fillText(String(c), ML + (c - 1) * CW + CW / 2, MT - 5);
+	for (let c = 0; c <= 49; c++)
+		if (c === 0 || c % 7 === 0)
+			ctx.fillText(String(c), ML + c * CW + CW / 2, MT - 5);
 
 	for (let ri = 0; ri < runes.length; ri++) {
 		const rune = runes[ri];
@@ -951,11 +951,11 @@ function renderHeatmap(): void {
 		ctx.font = "9px sans-serif"; ctx.textAlign = "right"; ctx.fillStyle = "#94a3b8";
 		ctx.fillText(rune, ML - 3, y + CH - 3);
 
-		for (let c = 1; c <= 49; c++) {
+		for (let c = 0; c <= 49; c++) {
 			const lvl = data.counts[c] ?? {};
 			const tot = Object.values(lvl).reduce((s, v) => s + v, 0);
 			const pct = tot > 0 ? (lvl[rune] ?? 0) / tot : 0;
-			const x   = ML + (c - 1) * CW;
+			const x   = ML + c * CW;
 			ctx.fillStyle = CHOICE_LEVELS.has(c) ? "#0e2a45" : "#10101e";
 			ctx.fillRect(x, y, CW - 1, CH - 1);
 			if (pct > 0) {
@@ -992,22 +992,22 @@ function renderDistributionStrips(): void {
 		ctx.fillText(rune, ox + PL, oy + 10);
 
 		let maxC = 0;
-		for (let c = 1; c <= 49; c++) maxC = Math.max(maxC, data.counts[c]?.[rune] ?? 0);
+		for (let c = 0; c <= 49; c++) maxC = Math.max(maxC, data.counts[c]?.[rune] ?? 0);
 		if (!maxC) continue;
 
 		ctx.fillStyle = "#2a2a3a";
 		ctx.fillRect(ox + PL, oy + PT + cH, cW, 1);
 		ctx.fillStyle = "#555"; ctx.font = "7px monospace"; ctx.textAlign = "center";
-		const bw = cW / 49;
-		for (const c of [1, 14, 28, 42, 49])
-			ctx.fillText(String(c), ox + PL + (c - 1) * bw + bw / 2, oy + PH - 2);
+		const bw = cW / 50;
+		for (const c of [0, 14, 28, 42, 49])
+			ctx.fillText(String(c), ox + PL + c * bw + bw / 2, oy + PH - 2);
 
-		for (let c = 1; c <= 49; c++) {
+		for (let c = 0; c <= 49; c++) {
 			const count = data.counts[c]?.[rune] ?? 0;
 			if (!count) continue;
 			const bh = Math.max(1, (count / maxC) * cH);
 			ctx.fillStyle = CHOICE_LEVELS.has(c) ? "#fbbf24" : color;
-			ctx.fillRect(ox + PL + (c - 1) * bw, oy + PT + cH - bh, Math.max(1, bw - 0.5), bh);
+			ctx.fillRect(ox + PL + c * bw, oy + PT + cH - bh, Math.max(1, bw - 0.5), bh);
 		}
 	}
 }
@@ -1017,12 +1017,12 @@ function renderStackedBar(): void {
 	const allRunes = [...RUNE_TIER_ORDER, "Any"];
 	const LG_COLS = 3, LG_ROW_H = 12;
 	const LG_H = Math.ceil(allRunes.length / LG_COLS) * LG_ROW_H + 8;
-	const W = ML + 49 * BARW + MR;
+	const W = ML + 50 * BARW + MR;
 	const ctx = getVizCtx("stacked-container", W, MT + CHART_H + MB + LG_H);
 	if (!ctx) return;
 
 	let maxTotal = 0;
-	for (let c = 1; c <= 49; c++) {
+	for (let c = 0; c <= 49; c++) {
 		const t = Object.values(data.counts[c] ?? {}).reduce((s, v) => s + v, 0);
 		maxTotal = Math.max(maxTotal, t);
 	}
@@ -1033,17 +1033,17 @@ function renderStackedBar(): void {
 
 	for (const frac of [0, 0.5, 1]) {
 		const y = MT + CHART_H - Math.round(frac * CHART_H);
-		ctx.fillStyle = "#1e2a3a"; ctx.fillRect(ML, y, 49 * BARW, 1);
+		ctx.fillStyle = "#1e2a3a"; ctx.fillRect(ML, y, 50 * BARW, 1);
 		ctx.fillStyle = "#64748b"; ctx.font = "8px monospace"; ctx.textAlign = "right";
 		ctx.fillText(String(Math.round(maxTotal * frac)), ML - 2, y + 3);
 	}
 
 	ctx.fillStyle = "#64748b"; ctx.font = "9px monospace"; ctx.textAlign = "center";
-	for (let c = 1; c <= 49; c++)
-		if (c === 1 || c % 7 === 0)
-			ctx.fillText(String(c), ML + (c - 1) * BARW + BARW / 2, MT + CHART_H + MB - 2);
+	for (let c = 0; c <= 49; c++)
+		if (c === 0 || c % 7 === 0)
+			ctx.fillText(String(c), ML + c * BARW + BARW / 2, MT + CHART_H + MB - 2);
 
-	for (let c = 1; c <= 49; c++) {
+	for (let c = 0; c <= 49; c++) {
 		const lvl = data.counts[c] ?? {};
 		let stackY = MT + CHART_H;
 		for (const rune of allRunes) {
@@ -1052,7 +1052,7 @@ function renderStackedBar(): void {
 			const bh = Math.max(1, Math.round((count / maxTotal) * CHART_H));
 			stackY -= bh;
 			ctx.fillStyle = RUNE_COLORS[rune] ?? "#c084fc";
-			ctx.fillRect(ML + (c - 1) * BARW, stackY, BARW - 1, bh);
+			ctx.fillRect(ML + c * BARW, stackY, BARW - 1, bh);
 		}
 	}
 
