@@ -149,6 +149,13 @@ let lastBestChargeScore = -1;
 let pendingRune:   string | null = null;
 let pendingCharge: number | null = null;
 let pendingCount   = 0;
+let activePopover: HTMLElement | null = null;
+
+const SNAPSHOT_BUFFER_SIZE = 10;
+interface Snapshot { rune: string; charge: number | null; icon: ImageData; }
+const snapshotBuffer: Snapshot[] = [];
+let lastTrackedCharge: number | null = null;
+let inUncertainMode = false;
 
 // ── Persistence ───────────────────────────────────────────────────────────────
 
@@ -273,7 +280,7 @@ function extractFullIcon(buff: any): ImageData | null {
 // ── Charge display ────────────────────────────────────────────────────────────
 
 function nextCharge(): number {
-	return (data.lastCharge % MAX_CHARGE) + 1;
+	return data.lastCharge;
 }
 
 function updateChargeDisplay(): void {
@@ -283,29 +290,35 @@ function updateChargeDisplay(): void {
 
 // ── Recording ─────────────────────────────────────────────────────────────────
 
-function saveBuffScreenshot(runeName: string, chargeLevel: number | null): void {
-	if (!lastMatchedBuff) return;
-	const icon = extractFullIcon(lastMatchedBuff);
-	if (!icon) return;
+function iconToPixels(icon: ImageData): string {
 	const bytes = new Uint8Array(icon.data.buffer);
 	let binary = "";
 	for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-	const pixels = btoa(binary);
-	// null charge → saved as "unknown" for manual labeling
+	return btoa(binary);
+}
+
+function sendIconToServer(rune: string, charge: number | null, icon: ImageData, uncertain: boolean): void {
 	fetch("http://localhost:8080/save-buff", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ rune: runeName, charge: chargeLevel ?? "unknown", pixels }),
+		body: JSON.stringify({ rune, charge: charge ?? "unknown", pixels: iconToPixels(icon), uncertain }),
 	}).then(r => r.json()).then((j: any) => {
-		if (j.ok) addDebug(`Screenshot saved: ${j.file}`);
-	}).catch(() => { /* server not running — silently skip */ });
+		if (j.ok) addDebug(`Saved${uncertain ? " (uncertain)" : ""}: ${j.file}`);
+	}).catch(() => {});
+}
+
+function saveBuffScreenshot(runeName: string, chargeLevel: number | null, uncertain = false): void {
+	if (!lastMatchedBuff) return;
+	const icon = extractFullIcon(lastMatchedBuff);
+	if (!icon) return;
+	sendIconToServer(runeName, chargeLevel, icon, uncertain);
 }
 
 function recordReading(runeName: string, chargeLevel: number): void {
 	if (!data.counts[chargeLevel]) data.counts[chargeLevel] = {};
 	data.counts[chargeLevel][runeName] = (data.counts[chargeLevel][runeName] ?? 0) + 1;
 	data.totalReadings++;
-	data.lastCharge         = chargeLevel === MAX_CHARGE ? 0 : chargeLevel;
+	data.lastCharge         = chargeLevel;
 	data.lastRecordedRune   = runeName;
 	data.lastRecordedCharge = chargeLevel;
 
@@ -365,7 +378,10 @@ function startPolling(): void {
 					lastSeenCharge = null;
 					pendingRune   = null;
 					pendingCharge = null;
-					pendingCount  = 0;
+					pendingCount      = 0;
+					lastTrackedCharge = null;
+					inUncertainMode   = false;
+					snapshotBuffer.length = 0;
 					lastAllIcons = [];
 					updateBuffPreviews();
 				} else if (isHeartbeat) {
@@ -411,6 +427,15 @@ function startPolling(): void {
 			const charge = readCharge(matchedBuff);
 			updateDebugCanvas(matchedBuff);
 
+			if (!inUncertainMode) {
+				const snapshotIcon = extractFullIcon(matchedBuff);
+				const last = snapshotBuffer[snapshotBuffer.length - 1];
+				if (snapshotIcon && (!last || last.rune !== runeName || last.charge !== charge)) {
+					snapshotBuffer.push({ rune: runeName, charge, icon: snapshotIcon });
+					if (snapshotBuffer.length > SNAPSHOT_BUFFER_SIZE) snapshotBuffer.shift();
+				}
+			}
+
 			// Stability gate: only commit a (rune, charge) pair after it has been
 			// seen consistently for STABLE_POLLS consecutive polls.
 			if (runeName === pendingRune && charge === pendingCharge) {
@@ -427,18 +452,52 @@ function startPolling(): void {
 			if (pendingCount === STABLE_POLLS && (runeName !== lastSeenRune || charge !== lastSeenCharge)) {
 				addDebug(`Stable: ${runeName} charge=${charge ?? "?"}`);
 
+				const expectedNext = lastTrackedCharge !== null
+					? (lastTrackedCharge % MAX_CHARGE) + 1
+					: null;
+				const isSequential = charge !== null && charge > 0
+					&& (expectedNext === null || charge === expectedNext);
+
+				if (charge !== null && charge > 0) lastTrackedCharge = charge;
+
 				if (charge !== null) {
 					data.lastCharge = charge === MAX_CHARGE ? 0 : charge;
 					updateChargeDisplay();
 
-					if (charge !== lastSeenCharge && runeName !== "Any" && charge !== 0) {
-						recordReading(runeName, charge);
-					} else if (runeName === "Any" && charge !== lastSeenCharge) {
-						saveBuffScreenshot("Any", charge);
+					if (charge !== lastSeenCharge && charge !== 0) {
+						if (!inUncertainMode && !isSequential && expectedNext !== null) {
+							inUncertainMode = true;
+							const n = snapshotBuffer.length;
+							addDebug(`Gap: expected charge ${expectedNext}, got ${charge}` +
+								(n > 0 ? ` — saving ${n} buffered frame(s) as uncertain` : " — entering uncertain mode"));
+							for (const s of snapshotBuffer) sendIconToServer(s.rune, s.charge, s.icon, true);
+							snapshotBuffer.length = 0;
+						} else if (inUncertainMode) {
+							if (isSequential) {
+								inUncertainMode = false;
+								addDebug(`Sequence resumed at charge ${charge}`);
+								snapshotBuffer.length = 0;
+								if (runeName !== "Any") recordReading(runeName, charge);
+								else saveBuffScreenshot("Any", charge);
+							} else {
+								saveBuffScreenshot(runeName, charge, true);
+							}
+						} else {
+							if (runeName !== "Any") recordReading(runeName, charge);
+							else saveBuffScreenshot("Any", charge);
+							snapshotBuffer.length = 0;
+						}
 					}
 				} else {
-					// Charge unreadable — save for manual labeling
-					saveBuffScreenshot(runeName, null);
+					if (!inUncertainMode) {
+						inUncertainMode = true;
+						const n = snapshotBuffer.length;
+						addDebug(`Charge unreadable` +
+							(n > 0 ? ` — flushing ${n} frame(s) as uncertain` : " — entering uncertain mode"));
+						for (const s of snapshotBuffer) sendIconToServer(s.rune, s.charge, s.icon, true);
+						snapshotBuffer.length = 0;
+					}
+					saveBuffScreenshot(runeName, null, true);
 				}
 
 				lastSeenRune   = runeName;
@@ -663,7 +722,75 @@ function addDebug(msg: string): void {
 	if (el) el.innerHTML = debugLog.map(l => `<div>${l}</div>`).join("");
 }
 
+// ── Cell editor popover ───────────────────────────────────────────────────────
+
+function closePopover(): void {
+	if (activePopover) { activePopover.remove(); activePopover = null; }
+}
+
+function showCellEditor(charge: number, runeName: string, anchorEl: HTMLElement): void {
+	closePopover();
+
+	const pop = document.createElement("div");
+	pop.className = "cell-popover";
+
+	function render(): void {
+		const count = data.counts[charge]?.[runeName] ?? 0;
+		pop.innerHTML = `
+			<div class="cell-popover-title">Charge ${charge} — ${runeName}</div>
+			<div class="cell-popover-count">Count: <strong>${count}</strong></div>
+			<div class="cell-popover-actions">
+				<button id="pop-dec" ${count <= 0 ? "disabled" : ""}>−1</button>
+				<button id="pop-inc">+1</button>
+				<button id="pop-clear" ${count <= 0 ? "disabled" : ""}>Clear</button>
+			</div>`;
+
+		pop.querySelector("#pop-dec")?.addEventListener("click", (e) => {
+			e.stopPropagation();
+			adjustCount(-1);
+		});
+		pop.querySelector("#pop-inc")?.addEventListener("click", (e) => {
+			e.stopPropagation();
+			adjustCount(+1);
+		});
+		pop.querySelector("#pop-clear")?.addEventListener("click", (e) => {
+			e.stopPropagation();
+			const c = data.counts[charge]?.[runeName] ?? 0;
+			if (c > 0) adjustCount(-c);
+		});
+	}
+
+	function adjustCount(delta: number): void {
+		if (!data.counts[charge]) data.counts[charge] = {};
+		const current = data.counts[charge][runeName] ?? 0;
+		const newCount = current + delta;
+		if (newCount <= 0) {
+			delete data.counts[charge][runeName];
+			if (Object.keys(data.counts[charge]).length === 0) delete data.counts[charge];
+		} else {
+			data.counts[charge][runeName] = newCount;
+		}
+		data.totalReadings = Object.values(data.counts)
+			.flatMap(r => Object.values(r))
+			.reduce((s, c) => s + c, 0);
+		saveData();
+		renderTable();
+	}
+
+	render();
+	document.body.appendChild(pop);
+	activePopover = pop;
+
+	const rect = anchorEl.getBoundingClientRect();
+	pop.style.left = `${Math.max(0, Math.min(rect.left, window.innerWidth - 160))}px`;
+	pop.style.top  = `${rect.bottom + 4}px`;
+
+	pop.addEventListener("click", (e) => e.stopPropagation());
+	setTimeout(() => document.addEventListener("click", closePopover, { once: true }), 0);
+}
+
 function renderTable(): void {
+	closePopover();
 	const container = document.getElementById("table-container")!;
 
 	const runeNames = Array.from(
@@ -741,6 +868,12 @@ function renderTable(): void {
 				td.className = count === maxCount ? "has-data top-rune" : "has-data";
 				td.innerHTML = `<span class="count">${count}</span>` +
 					(total > 1 ? `<span class="pct">${pct}%</span>` : "");
+				const capturedLevel = level;
+				const capturedRune  = runeName;
+				td.addEventListener("click", (e) => {
+					e.stopPropagation();
+					showCellEditor(capturedLevel, capturedRune, td);
+				});
 			}
 			row.appendChild(td);
 		}
@@ -808,14 +941,14 @@ function init(): void {
 	});
 
 	document.getElementById("charge-dec")?.addEventListener("click", () => {
-		data.lastCharge = (data.lastCharge - 1 + MAX_CHARGE) % MAX_CHARGE;
+		data.lastCharge = data.lastCharge <= 0 ? MAX_CHARGE : data.lastCharge - 1;
 		saveData();
 		updateChargeDisplay();
 		addDebug(`Manual charge → next: ${nextCharge()}`);
 	});
 
 	document.getElementById("charge-inc")?.addEventListener("click", () => {
-		data.lastCharge = (data.lastCharge + 1) % MAX_CHARGE;
+		data.lastCharge = data.lastCharge >= MAX_CHARGE ? 0 : data.lastCharge + 1;
 		saveData();
 		updateChargeDisplay();
 		addDebug(`Manual charge → next: ${nextCharge()}`);
@@ -835,6 +968,7 @@ function init(): void {
 		saveBuffScreenshot(rune ?? "unknown", charge);
 		addDebug(`Manual save: ${rune ?? "unknown"} charge=${charge ?? "unknown"}`);
 	});
+
 
 	updateChargeDisplay();
 	renderTable();

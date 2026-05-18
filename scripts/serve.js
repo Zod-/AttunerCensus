@@ -13,9 +13,10 @@ const fs    = require("fs");
 const path  = require("path");
 const sharp = require("sharp");
 
-const DIST_DIR = path.resolve(__dirname, "../dist");
-const BUFS_DIR = path.resolve(__dirname, "../src/captured-buffs");
-const PORT     = 8080;
+const DIST_DIR      = path.resolve(__dirname, "../dist");
+const BUFS_DIR      = path.resolve(__dirname, "../src/captured-buffs");
+const UNCERTAIN_DIR = path.resolve(__dirname, "../src/captured-buffs/uncertain");
+const PORT          = 8080;
 
 const MIME_TYPES = {
     ".html": "text/html; charset=utf-8",
@@ -26,7 +27,8 @@ const MIME_TYPES = {
     ".ico":  "image/x-icon",
 };
 
-fs.mkdirSync(BUFS_DIR, { recursive: true });
+fs.mkdirSync(BUFS_DIR,      { recursive: true });
+fs.mkdirSync(UNCERTAIN_DIR, { recursive: true });
 
 const server = http.createServer(async (req, res) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -44,7 +46,7 @@ const server = http.createServer(async (req, res) => {
         req.on("data", chunk => { body += chunk; });
         req.on("end", async () => {
             try {
-                const { rune, charge, pixels } = JSON.parse(body);
+                const { rune, charge, pixels, uncertain } = JSON.parse(body);
                 if (!rune || charge == null || !pixels) throw new Error("Missing rune/charge/pixels");
 
                 // pixels is base64-encoded RGBA data for a 27×27 icon
@@ -52,14 +54,13 @@ const server = http.createServer(async (req, res) => {
                 if (buf.length !== 27 * 27 * 4) throw new Error(`Bad pixel length: ${buf.length}`);
 
                 // Find next available index for this rune+charge combo
+                const saveDir = uncertain ? UNCERTAIN_DIR : BUFS_DIR;
                 const prefix = `${rune}_${charge}_`;
-                const existing = fs.existsSync(BUFS_DIR)
-                    ? fs.readdirSync(BUFS_DIR).filter(f => f.startsWith(prefix) && f.endsWith(".png"))
-                    : [];
+                const existing = fs.readdirSync(saveDir).filter(f => f.startsWith(prefix) && f.endsWith(".png"));
                 const indices = existing.map(f => { const m = f.match(/_(\d+)\.png$/); return m ? parseInt(m[1], 10) : -1; });
                 const nextIdx = indices.length > 0 ? Math.max(...indices) + 1 : 0;
 
-                const outPath = path.join(BUFS_DIR, `${rune}_${charge}_${nextIdx}.png`);
+                const outPath = path.join(saveDir, `${rune}_${charge}_${nextIdx}.png`);
                 await sharp(buf, { raw: { width: 27, height: 27, channels: 4 } }).png().toFile(outPath);
 
                 console.log(`[save-buff] ${path.basename(outPath)}`);
