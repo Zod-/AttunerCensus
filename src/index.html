@@ -77,8 +77,12 @@
 			</div>
 			<div id="debug-canvas-row">
 				<div>
-					<div class="debug-canvas-label">Charge pixels (binarised)</div>
+					<div class="debug-canvas-label">Charge pixels (orange=masked art)</div>
 					<canvas id="debug-charge-mini" width="100" height="60"></canvas>
+				</div>
+				<div>
+					<div class="debug-canvas-label">Art mask for rune</div>
+					<canvas id="debug-charge-mask" width="100" height="60"></canvas>
 				</div>
 				<div>
 					<div class="debug-canvas-label">Best charge template</div>
@@ -89,6 +93,7 @@
 					<canvas id="debug-charge-diff" width="100" height="60"></canvas>
 				</div>
 			</div>
+			<div id="debug-mask-stats"></div>
 			<div id="debug-log"></div>
 		</details>
 

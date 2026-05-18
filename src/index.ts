@@ -455,7 +455,7 @@ function startPolling(): void {
 			const { name: runeName, score } = matchedResult;
 			lastMatchedBuff = matchedBuff;
 			const charge = readCharge(matchedBuff, runeName);
-			updateDebugCanvas(matchedBuff);
+			updateDebugCanvas(matchedBuff, runeName);
 
 			if (!inUncertainMode) {
 				const snapshotIcon = extractFullIcon(matchedBuff);
@@ -543,7 +543,7 @@ function startPolling(): void {
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
 
-function updateDebugCanvas(buff: any): void {
+function updateDebugCanvas(buff: any, runeName: string): void {
 	const buf = buff.buffer as ImageData;
 	const bx  = buff.bufferx as number;
 	const by  = buff.buffery as number;
@@ -657,28 +657,85 @@ function updateDebugCanvas(buff: any): void {
 	// Region: icon rows 12–26, cols 0–24 (25×15), displayed at 4× scale = 100×60.
 	const CMW = 25, CMH = 15, SCALE_CHARGE = 4;
 
+	// Look up the art mask for this rune (null if none loaded).
+	const artMask = RUNE_ART_MASKS.loaded
+		? ((RUNE_ART_MASKS as any)[runeName] as ImageData | undefined) ?? null
+		: null;
+
 	// Binarize charge region for display: 1=bright, 2=dark/shadow, 0=background.
-	const chargeMini = new Uint8Array(CMW * CMH);
+	// artMasked tracks which pixels were suppressed by the rune art mask.
+	const chargeMini   = new Uint8Array(CMW * CMH);
+	const artMaskedPx  = new Uint8Array(CMW * CMH); // 1 = this pixel was masked as rune art
+	let rawBright = 0, maskedBright = 0;
 	for (let r = 0; r < CMH; r++) {
 		for (let c = 0; c < CMW; c++) {
+			const i  = r * CMW + c;
 			const si = ((by + 12 + r) * buf.width + (bx + c)) * 4;
 			const R = buf.data[si], G = buf.data[si+1], B = buf.data[si+2];
-			if (R > 190 && G > 190 && B > 190)   chargeMini[r * CMW + c] = 1;
-			else if (R < 80 && G < 80 && B < 80) chargeMini[r * CMW + c] = 2;
+			const isBright = R > 190 && G > 190 && B > 190;
+			const isMasked = artMask !== null && artMask.data[i * 4 + 3] === 255;
+			if (isBright) rawBright++;
+			if (isBright && isMasked) { artMaskedPx[i] = 1; }
+			else if (isBright)        { chargeMini[i] = 1; maskedBright++; }
+			else if (R < 80 && G < 80 && B < 80) chargeMini[i] = 2;
 		}
 	}
 
-	// Canvas 1: binarized mini — white=bright, mid-grey=dark/shadow, dark=background
+	// Canvas 1: binarized mini — white=bright digit, orange=masked rune art, grey=shadow, dark=background
 	const miniCanvas = document.getElementById("debug-charge-mini") as HTMLCanvasElement | null;
 	if (miniCanvas) {
 		const ctx = miniCanvas.getContext("2d")!;
 		ctx.clearRect(0, 0, miniCanvas.width, miniCanvas.height);
 		for (let r = 0; r < CMH; r++) {
 			for (let c = 0; c < CMW; c++) {
-				const v = chargeMini[r * CMW + c];
-				ctx.fillStyle = v === 1 ? "#ffffff" : v === 2 ? "#888888" : "#2a2a2a";
+				const i = r * CMW + c;
+				let color: string;
+				if (artMaskedPx[i])         color = "#ff8800"; // rune art — masked out
+				else if (chargeMini[i] === 1) color = "#ffffff"; // bright digit
+				else if (chargeMini[i] === 2) color = "#888888"; // shadow
+				else                          color = "#2a2a2a"; // background
+				ctx.fillStyle = color;
 				ctx.fillRect(c * SCALE_CHARGE, r * SCALE_CHARGE, SCALE_CHARGE, SCALE_CHARGE);
 			}
+		}
+	}
+
+	// Canvas 2 (new): art mask shape — orange=masked pixel, dark=clean
+	const maskCanvas = document.getElementById("debug-charge-mask") as HTMLCanvasElement | null;
+	if (maskCanvas) {
+		const ctx = maskCanvas.getContext("2d")!;
+		ctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+		let maskPxCount = 0;
+		for (let r = 0; r < CMH; r++) {
+			for (let c = 0; c < CMW; c++) {
+				const i = r * CMW + c;
+				const isMasked = artMask !== null && artMask.data[i * 4 + 3] === 255;
+				if (isMasked) maskPxCount++;
+				ctx.fillStyle = isMasked ? "#ff8800" : "#2a2a2a";
+				ctx.fillRect(c * SCALE_CHARGE, r * SCALE_CHARGE, SCALE_CHARGE, SCALE_CHARGE);
+			}
+		}
+		// Overlay mask pixel count
+		if (artMask !== null) {
+			ctx.fillStyle = maskPxCount > 0 ? "#ff8800" : "#888888";
+			ctx.font = "bold 9px monospace";
+			ctx.fillText(`${maskPxCount}px`, 2, CMH * SCALE_CHARGE - 2);
+		} else {
+			ctx.fillStyle = "#555555";
+			ctx.font = "9px monospace";
+			ctx.fillText("no mask", 2, CMH * SCALE_CHARGE - 2);
+		}
+	}
+
+	// Stats line: raw bright count → post-mask count, rune name, mask pixel count
+	const maskStatsEl = document.getElementById("debug-mask-stats");
+	if (maskStatsEl) {
+		if (artMask !== null) {
+			const maskSize = Array.from(artMask.data).filter((v, i) => i % 4 === 3 && v === 255).length;
+			const removed  = rawBright - maskedBright;
+			maskStatsEl.textContent = `miniWhite: ${rawBright} raw → ${maskedBright} after mask (−${removed}) | rune: ${runeName} | mask: ${maskSize} px`;
+		} else {
+			maskStatsEl.textContent = `miniWhite: ${rawBright} | rune: ${runeName} | mask: none`;
 		}
 	}
 

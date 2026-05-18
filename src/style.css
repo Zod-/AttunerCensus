@@ -384,6 +384,13 @@ tr.choice-row td.level-col {
 	display: block;
 }
 
+#debug-mask-stats {
+	font-size: 9px;
+	color: var(--muted);
+	font-family: monospace;
+	padding: 2px 0;
+}
+
 /* ── Legend ────────────────────────────────────────────────── */
 #legend {
 	margin-top: 4px;
