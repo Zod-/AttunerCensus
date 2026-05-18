@@ -11,6 +11,13 @@
  * the majority (>50%) of the source images.  This removes rune-specific background
  * bleed while keeping the white digit strokes.
  *
+ * Rune art masking: for runes that have charge-0 screenshots ({Rune}_0_*.png),
+ * a per-rune art mask is built from those images (pixels bright in ≥50% of charge-0
+ * images are rune art).  That mask is subtracted from all charge-N screenshots of that
+ * rune before contributing to the majority vote, keeping only the digit pixels.
+ * Masks are also saved to src/charge-templates/{RuneName}.mask.data.png for use
+ * during live charge reading in index.ts.
+ *
  * Output: src/charge-templates/{N}.data.png  (25×15, RGBA, white digit / transparent bg)
  */
 
@@ -28,13 +35,9 @@ const TMPL_W          = 25;
 const TMPL_H          = 15;   // rows 12–26 → 15 rows
 const WHITE_THRESHOLD  = 190;  // R, G, B all above this → digit pixel
 const SHADOW_THRESHOLD = 80;   // R, G, B all below this → shadow pixel
-const DIGIT_COL0 = 2;          // leftmost column digits ever occupy (measured from templates)
+const ART_MASK_THRESH  = 0.50; // fraction of charge-0 images where a pixel must be bright to be masked
+const DIGIT_COL0 = 2;          // leftmost column digits ever occupy
 const DIGIT_COL1 = 14;         // rightmost column digits ever occupy
-
-// Pixels that are bright in ≥ this fraction of a rune's screenshots across all charges
-// are treated as rune-art background, not digit pixels.
-const BG_VOTE_THRESH  = 0.70;
-const MIN_IMGS_FOR_BG = 4;   // need at least this many shots of a rune to build a mask
 
 async function main() {
     fs.mkdirSync(OUT_DIR, { recursive: true });
@@ -48,37 +51,49 @@ async function main() {
         const parts  = f.split("_");
         const rune   = parts[0];
         const charge = parseInt(parts[1], 10);
-        if (charge >= 1 && charge <= 49) {
-            (byCharge[charge] ??= []).push(path.join(SRC_DIR, f));
-            (byRune[rune]     ??= []).push(path.join(SRC_DIR, f));
+        if (charge >= 0 && charge <= 49) {
+            if (charge >= 1) (byCharge[charge] ??= []).push(path.join(SRC_DIR, f));
+            (byRune[rune] ??= []).push(path.join(SRC_DIR, f));
         }
     }
 
-    // Build per-rune background masks: pixels that are always bright on a rune
-    // regardless of which digit is shown are rune-art artefacts, not digit pixels.
-    // Only built for runes with enough screenshots to be reliable.
-    const runeBgMasks = {};
-    for (const [rune, paths] of Object.entries(byRune)) {
-        if (paths.length < MIN_IMGS_FOR_BG) continue;
-        const buffers = await Promise.all(paths.map(p => sharp(p).raw().ensureAlpha().toBuffer()));
+    // ── Build per-rune art masks from charge-0 screenshots ────────────────────
+    // Charge-0 = buff icon with no digit overlay, so every bright pixel is rune art.
+    // Only runes where rune art is bright (passes the R/G/B > 190 threshold) need a
+    // mask; runes with coloured (non-white) art produce an empty mask automatically.
+    const runeArtMasks = {}; // rune → Uint8Array(TMPL_W * TMPL_H), 1 = rune art
+    const runeNames = Object.keys(byRune).sort();
+    for (const rune of runeNames) {
+        const charge0Paths = (byRune[rune] ?? []).filter(p => path.basename(p).split("_")[1] === "0");
+        if (charge0Paths.length === 0) continue;
+
+        const buffers = await Promise.all(charge0Paths.map(p => sharp(p).raw().ensureAlpha().toBuffer()));
         const hitCount = new Int32Array(TMPL_W * TMPL_H);
         for (const buf of buffers) {
             for (let r = 0; r < TMPL_H; r++) {
-                for (let c = DIGIT_COL0; c <= DIGIT_COL1; c++) {
+                for (let c = 0; c < TMPL_W; c++) {
                     const si = ((CHARGE_ROW0 + r) * ICON_W + c) * 4;
-                    if (buf[si] > WHITE_THRESHOLD && buf[si+1] > WHITE_THRESHOLD && buf[si+2] > WHITE_THRESHOLD) {
+                    if (buf[si] > WHITE_THRESHOLD && buf[si+1] > WHITE_THRESHOLD && buf[si+2] > WHITE_THRESHOLD)
                         hitCount[r * TMPL_W + c]++;
-                    }
                 }
             }
         }
         const mask = new Uint8Array(TMPL_W * TMPL_H);
-        let bgPixels = 0;
+        let maskedPixels = 0;
         for (let i = 0; i < TMPL_W * TMPL_H; i++) {
-            if (hitCount[i] / buffers.length >= BG_VOTE_THRESH) { mask[i] = 1; bgPixels++; }
+            if (hitCount[i] / buffers.length >= ART_MASK_THRESH) { mask[i] = 1; maskedPixels++; }
         }
-        runeBgMasks[rune] = mask;
-        console.log(`  BG mask: ${rune.padEnd(8)} — ${bgPixels} background pixels from ${paths.length} images`);
+        runeArtMasks[rune] = mask;
+        console.log(`  Art mask: ${rune.padEnd(8)} — ${maskedPixels} pixels from ${charge0Paths.length} charge-0 image(s)`);
+
+        // Save mask for runtime use in index.ts
+        const maskOut = Buffer.alloc(TMPL_W * TMPL_H * 4, 0);
+        for (let i = 0; i < TMPL_W * TMPL_H; i++) {
+            if (mask[i]) { maskOut[i*4] = maskOut[i*4+1] = maskOut[i*4+2] = 255; maskOut[i*4+3] = 255; }
+        }
+        await sharp(maskOut, { raw: { width: TMPL_W, height: TMPL_H, channels: 4 } })
+            .png()
+            .toFile(path.join(OUT_DIR, `${rune}.mask.data.png`));
     }
     console.log();
 
@@ -93,36 +108,37 @@ async function main() {
             paths.map(p => sharp(p).raw().ensureAlpha().toBuffer())
         );
 
-        // If every screenshot for this charge comes from the same rune, apply that
-        // rune's background mask to strip art-bleed pixels from the template.
-        const runesHere = new Set(paths.map(p => path.basename(p).split("_")[0]));
-        const singleRune = runesHere.size === 1 ? [...runesHere][0] : null;
-        const bgMask = singleRune ? (runeBgMasks[singleRune] ?? null) : null;
+        // Map each path to its source rune for mask lookup
+        const pathRunes = paths.map(p => path.basename(p).split("_")[0]);
 
-        // Accumulate how many images have a white pixel at each position.
+        // Accumulate how many images have a white pixel at each position,
+        // subtracting any rune art pixels for the source rune.
+        // Only consider the digit column range to avoid rune art outside the digit area.
         const hitCount = new Int32Array(TMPL_W * TMPL_H);
-        for (const buf of buffers) {
+        for (let bi = 0; bi < buffers.length; bi++) {
+            const buf  = buffers[bi];
+            const mask = runeArtMasks[pathRunes[bi]] ?? null;
             for (let r = 0; r < TMPL_H; r++) {
                 for (let c = DIGIT_COL0; c <= DIGIT_COL1; c++) {
+                    const i  = r * TMPL_W + c;
+                    if (mask && mask[i]) continue; // pixel is rune art — skip
                     const si = ((CHARGE_ROW0 + r) * ICON_W + c) * 4;
                     if (
                         buf[si]     > WHITE_THRESHOLD &&
                         buf[si + 1] > WHITE_THRESHOLD &&
                         buf[si + 2] > WHITE_THRESHOLD
                     ) {
-                        hitCount[r * TMPL_W + c]++;
+                        hitCount[i]++;
                     }
                 }
             }
         }
 
-        // Majority vote: pixel is white in template if >50% of images agreed,
-        // unless it is flagged as background art for the sole rune in this batch.
+        // Majority vote: pixel is white in template if >50% of images agreed.
         const out = Buffer.alloc(TMPL_W * TMPL_H * 4, 0);
         const whiteMask = new Uint8Array(TMPL_W * TMPL_H);
         let whitePixels = 0;
         for (let i = 0; i < TMPL_W * TMPL_H; i++) {
-            if (bgMask && bgMask[i]) continue; // rune-art background — skip
             if (hitCount[i] / buffers.length > 0.5) {
                 out[i * 4]     = 255;
                 out[i * 4 + 1] = 255;
@@ -151,12 +167,14 @@ async function main() {
             }
         }
         const shadowHit = new Int32Array(TMPL_W * TMPL_H);
-        for (const buf of buffers) {
+        for (let bi = 0; bi < buffers.length; bi++) {
+            const buf  = buffers[bi];
+            const mask = runeArtMasks[pathRunes[bi]] ?? null;
             for (let r = 0; r < TMPL_H; r++) {
                 for (let c = DIGIT_COL0; c <= DIGIT_COL1; c++) {
                     const i = r * TMPL_W + c;
-                    if (!dilated[i] || whiteMask[i]) continue; // only shadow candidates
-                    if (bgMask && bgMask[i]) continue;
+                    if (!dilated[i] || whiteMask[i]) continue;
+                    if (mask && mask[i]) continue;
                     const si = ((CHARGE_ROW0 + r) * ICON_W + c) * 4;
                     if (buf[si] < SHADOW_THRESHOLD && buf[si+1] < SHADOW_THRESHOLD && buf[si+2] < SHADOW_THRESHOLD)
                         shadowHit[i]++;
@@ -179,8 +197,10 @@ async function main() {
             .png()
             .toFile(outPath);
 
-        const maskNote = bgMask ? ` [bg-masked: ${singleRune}]` : "";
-        console.log(`  charge ${String(charge).padStart(2)}: ${String(buffers.length).padStart(2)} image(s), ${String(whitePixels).padStart(3)} white + ${String(shadowPixels).padStart(3)} shadow → ${charge}.data.png${maskNote}`);
+        const runesHere = [...new Set(pathRunes)].sort().join("+");
+        const masked = pathRunes.filter(r => runeArtMasks[r]).length;
+        const maskNote = masked > 0 ? ` [${masked}/${buffers.length} masked]` : "";
+        console.log(`  charge ${String(charge).padStart(2)}: ${String(buffers.length).padStart(2)} image(s), ${String(whitePixels).padStart(3)} white + ${String(shadowPixels).padStart(3)} shadow → ${charge}.data.png  [${runesHere}]${maskNote}`);
     }
 
     console.log(`\nDone — templates written to ${path.relative(process.cwd(), OUT_DIR)}`);

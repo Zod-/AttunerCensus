@@ -58,6 +58,16 @@ const RUNE_TEMPLATES = webpackImages({
 	Time:   require("./templates/Time.data.png"),
 });
 
+// ── Rune art masks for charge reading (25×15, opaque = rune art pixel to ignore) ─
+// Generated from charge-0 screenshots (no digit) via scripts/generate-charge-templates.js.
+// Applied during readCharge() to remove bright rune art from the binarised mini so
+// it doesn't inflate miniWhite and skew recall toward multi-digit templates.
+// Add an entry here whenever a rune's charge-0 screenshots are captured.
+const RUNE_ART_MASKS = webpackImages({
+	Air:  require("./charge-templates/Air.mask.data.png"),
+	// Death: require("./charge-templates/Death.mask.data.png"),  // add once Death_0_*.png captured
+});
+
 // ── Charge templates (25×15, white digit pixels on transparent background) ───
 // Generated from actual buff screenshots via scripts/generate-charge-templates.js.
 // Each template covers the digit region (icon rows 12-26) binarised at R/G/B > 190.
@@ -209,12 +219,19 @@ function identifyRune(buff: any): { name: string; score: number } | null {
 	return null;
 }
 
-function readCharge(buff: any): number | null {
+function readCharge(buff: any, runeName: string): number | null {
 	if (!CHARGE_TEMPLATES.loaded) return null;
 
 	const buf = buff.buffer as ImageData;
 	const bx  = buff.bufferx as number;
 	const by  = buff.buffery as number;
+
+	// Per-rune art mask: pixels that are always bright rune art (not digit pixels).
+	// When loaded, these positions are forced to background (0) so rune art doesn't
+	// inflate miniWhite and skew recall toward multi-digit templates.
+	const artMask = RUNE_ART_MASKS.loaded
+		? ((RUNE_ART_MASKS as any)[runeName] as ImageData | null)
+		: null;
 
 	// Binarize icon rows 12–26 (25×15 region):
 	//   1 = bright digit pixel (R/G/B > 190)
@@ -224,10 +241,12 @@ function readCharge(buff: any): number | null {
 	const mini = new Uint8Array(MW * MH);
 	for (let r = 0; r < MH; r++) {
 		for (let c = 0; c < MW; c++) {
+			const i  = r * MW + c;
+			if (artMask && artMask.data[i * 4 + 3] === 255) continue; // rune art → background
 			const si = ((by + 12 + r) * buf.width + (bx + c)) * 4;
 			const R = buf.data[si], G = buf.data[si+1], B = buf.data[si+2];
-			if (R > 190 && G > 190 && B > 190)   mini[r * MW + c] = 1;
-			else if (R < 80 && G < 80 && B < 80) mini[r * MW + c] = 2;
+			if (R > 190 && G > 190 && B > 190)   mini[i] = 1;
+			else if (R < 80 && G < 80 && B < 80) mini[i] = 2;
 		}
 	}
 
@@ -435,7 +454,7 @@ function startPolling(): void {
 
 			const { name: runeName, score } = matchedResult;
 			lastMatchedBuff = matchedBuff;
-			const charge = readCharge(matchedBuff);
+			const charge = readCharge(matchedBuff, runeName);
 			updateDebugCanvas(matchedBuff);
 
 			if (!inUncertainMode) {
