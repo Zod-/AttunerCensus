@@ -433,6 +433,8 @@ function startPolling(): void {
 
 					if (charge !== lastSeenCharge && runeName !== "Any" && charge !== 0) {
 						recordReading(runeName, charge);
+					} else if (runeName === "Any" && charge !== lastSeenCharge) {
+						saveBuffScreenshot("Any", charge);
 					}
 				} else {
 					// Charge unreadable — save for manual labeling
