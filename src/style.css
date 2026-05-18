@@ -133,6 +133,44 @@ button:hover { background: rgba(192,132,252,.25); }
 	color: var(--muted);
 }
 
+/* ── Visualization sections ────────────────────────────────── */
+.viz-section {
+	border: 1px solid rgba(255,255,255,.06);
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.viz-section > summary {
+	cursor: pointer;
+	padding: 4px 8px;
+	background: var(--surface);
+	color: var(--accent);
+	font-size: 11px;
+	font-weight: 600;
+	user-select: none;
+	list-style: none;
+}
+
+.viz-section > summary::-webkit-details-marker { display: none; }
+
+.viz-section > summary::before {
+	content: "▶";
+	display: inline-block;
+	margin-right: 5px;
+	font-size: 8px;
+	opacity: .6;
+	transition: transform .15s;
+}
+
+.viz-section[open] > summary::before { transform: rotate(90deg); }
+
+.viz-wrap {
+	overflow-x: auto;
+	background: var(--bg);
+}
+
+canvas.viz-canvas { display: block; }
+
 /* ── Table container ───────────────────────────────────────── */
 #table-container {
 	overflow-x: auto;
@@ -212,11 +250,60 @@ thead th.level-col { z-index: 3; }
 /* Data cells */
 td.has-data {
 	background: var(--cell-hi);
+	cursor: pointer;
+}
+
+td.has-data:hover {
+	background: rgba(192,132,252,.4);
 }
 
 td.top-rune {
 	background: rgba(192,132,252,.45);
 	font-weight: 700;
+}
+
+/* Cell editor popover */
+.cell-popover {
+	position: fixed;
+	z-index: 1000;
+	background: var(--surface);
+	border: 1px solid rgba(192,132,252,.5);
+	border-radius: 6px;
+	padding: 8px 10px;
+	min-width: 140px;
+	box-shadow: 0 4px 14px rgba(0,0,0,.6);
+}
+
+.cell-popover-title {
+	font-size: 11px;
+	color: var(--accent);
+	font-weight: 600;
+	margin-bottom: 4px;
+}
+
+.cell-popover-count {
+	font-size: 12px;
+	color: var(--text);
+	margin-bottom: 6px;
+}
+
+.cell-popover-actions {
+	display: flex;
+	gap: 4px;
+}
+
+.cell-popover-actions button {
+	flex: 1;
+	padding: 3px 6px;
+	font-size: 11px;
+}
+
+.cell-popover-actions #pop-clear {
+	border-color: rgba(248,113,113,.4);
+}
+
+.cell-popover-actions #pop-clear:hover {
+	background: rgba(248,113,113,.2);
 }
 
 .count { font-size: 13px; font-weight: 600; }

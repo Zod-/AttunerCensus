@@ -132,6 +132,19 @@ const CHOICE_LEVELS = new Set([7, 14, 21, 28, 35, 42, 49]);
 const MATCH_SCORE   = 0.7;  // minimum passed/tested ratio to accept an identification
 const STABLE_POLLS  = 3;    // consecutive polls a (rune, charge) must hold before recording
 
+const RUNE_TIER_ORDER = [
+	"Air", "Mind", "Water", "Earth", "Fire", "Body",
+	"Cosmic", "Chaos", "Astral", "Nature", "Law", "Death",
+	"Blood", "Soul", "Time",
+];
+
+const RUNE_COLORS: Record<string, string> = {
+	Air: "#7dd3fc", Mind: "#f472b6", Water: "#3b82f6", Earth: "#a3855a",
+	Fire: "#f97316", Body: "#4ade80", Cosmic: "#c084fc", Chaos: "#ef4444",
+	Astral: "#818cf8", Nature: "#22c55e", Law: "#fbbf24", Death: "#64748b",
+	Blood: "#dc2626", Soul: "#e2e8f0", Time: "#06b6d4", Any: "#fbbf24",
+};
+
 // ── State ─────────────────────────────────────────────────────────────────────
 
 let data: FrequencyData = loadData();
@@ -326,7 +339,7 @@ function recordReading(runeName: string, chargeLevel: number): void {
 	updateChargeDisplay();
 	setStatus(`Recorded: ${runeName} at charge ${chargeLevel} (total: ${data.totalReadings})`);
 	addDebug(`Recorded ${runeName} @ charge ${chargeLevel}`);
-	renderTable();
+	renderAll();
 	saveBuffScreenshot(runeName, chargeLevel);
 }
 
@@ -774,7 +787,7 @@ function showCellEditor(charge: number, runeName: string, anchorEl: HTMLElement)
 			.flatMap(r => Object.values(r))
 			.reduce((s, c) => s + c, 0);
 		saveData();
-		renderTable();
+		renderAll();
 	}
 
 	render();
@@ -894,6 +907,175 @@ function updateStats(): void {
 		`${data.totalReadings} readings · ${tracked}/${MAX_CHARGE} charge levels seen · last charge: ${data.lastCharge ?? "—"}`;
 }
 
+// ── Visualizations ────────────────────────────────────────────────────────────
+
+function vizActiveRunes(includeAny = false): string[] {
+	const seen = new Set<string>(
+		Object.values(data.counts).flatMap(lvl => Object.keys(lvl))
+	);
+	const runes = RUNE_TIER_ORDER.filter(r => seen.has(r));
+	if (includeAny && seen.has("Any")) runes.push("Any");
+	return runes;
+}
+
+function getVizCtx(containerId: string, w: number, h: number): CanvasRenderingContext2D | null {
+	const el = document.getElementById(containerId);
+	if (!el) return null;
+	let cv = el.querySelector<HTMLCanvasElement>("canvas");
+	if (!cv) { cv = document.createElement("canvas"); cv.className = "viz-canvas"; el.appendChild(cv); }
+	cv.width = w; cv.height = h;
+	const ctx = cv.getContext("2d")!;
+	ctx.clearRect(0, 0, w, h);
+	return ctx;
+}
+
+function renderHeatmap(): void {
+	const runes = vizActiveRunes();
+	if (!runes.length) return;
+	const ML = 52, MT = 18, CW = 7, CH = 15;
+	const W = ML + 49 * CW + 4, H = MT + runes.length * CH + 4;
+	const ctx = getVizCtx("heatmap-container", W, H);
+	if (!ctx) return;
+
+	ctx.fillStyle = "#1a1a2e";
+	ctx.fillRect(0, 0, W, H);
+
+	ctx.font = "9px monospace"; ctx.textAlign = "center"; ctx.fillStyle = "#64748b";
+	for (let c = 1; c <= 49; c++)
+		if (c === 1 || c % 7 === 0)
+			ctx.fillText(String(c), ML + (c - 1) * CW + CW / 2, MT - 5);
+
+	for (let ri = 0; ri < runes.length; ri++) {
+		const rune = runes[ri];
+		const y = MT + ri * CH;
+		ctx.font = "9px sans-serif"; ctx.textAlign = "right"; ctx.fillStyle = "#94a3b8";
+		ctx.fillText(rune, ML - 3, y + CH - 3);
+
+		for (let c = 1; c <= 49; c++) {
+			const lvl = data.counts[c] ?? {};
+			const tot = Object.values(lvl).reduce((s, v) => s + v, 0);
+			const pct = tot > 0 ? (lvl[rune] ?? 0) / tot : 0;
+			const x   = ML + (c - 1) * CW;
+			ctx.fillStyle = CHOICE_LEVELS.has(c) ? "#0e2a45" : "#10101e";
+			ctx.fillRect(x, y, CW - 1, CH - 1);
+			if (pct > 0) {
+				ctx.fillStyle = `rgba(192,132,252,${(tot < 3 ? pct * 0.3 : pct).toFixed(3)})`;
+				ctx.fillRect(x, y, CW - 1, CH - 1);
+				if (pct > 0.5) {
+					ctx.fillStyle = `rgba(251,191,36,${(((pct - 0.5) / 0.5) * 0.55).toFixed(3)})`;
+					ctx.fillRect(x, y, CW - 1, CH - 1);
+				}
+			}
+		}
+	}
+}
+
+function renderDistributionStrips(): void {
+	const runes = vizActiveRunes(true);
+	if (!runes.length) return;
+	const COLS = 3, PW = 130, PH = 65;
+	const ctx = getVizCtx("strips-container", COLS * PW, Math.ceil(runes.length / COLS) * PH);
+	if (!ctx) return;
+	ctx.fillStyle = "#1a1a2e";
+	ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+	for (let ri = 0; ri < runes.length; ri++) {
+		const rune  = runes[ri];
+		const ox    = (ri % COLS) * PW, oy = Math.floor(ri / COLS) * PH;
+		const color = RUNE_COLORS[rune] ?? "#c084fc";
+		const PL = 4, PR = 4, PT = 13, PB = 13;
+		const cW = PW - PL - PR, cH = PH - PT - PB;
+
+		ctx.fillStyle = "#16213e";
+		ctx.fillRect(ox + 2, oy + 2, PW - 4, PH - 4);
+		ctx.fillStyle = color; ctx.font = "bold 9px sans-serif"; ctx.textAlign = "left";
+		ctx.fillText(rune, ox + PL, oy + 10);
+
+		let maxC = 0;
+		for (let c = 1; c <= 49; c++) maxC = Math.max(maxC, data.counts[c]?.[rune] ?? 0);
+		if (!maxC) continue;
+
+		ctx.fillStyle = "#2a2a3a";
+		ctx.fillRect(ox + PL, oy + PT + cH, cW, 1);
+		ctx.fillStyle = "#555"; ctx.font = "7px monospace"; ctx.textAlign = "center";
+		const bw = cW / 49;
+		for (const c of [1, 14, 28, 42, 49])
+			ctx.fillText(String(c), ox + PL + (c - 1) * bw + bw / 2, oy + PH - 2);
+
+		for (let c = 1; c <= 49; c++) {
+			const count = data.counts[c]?.[rune] ?? 0;
+			if (!count) continue;
+			const bh = Math.max(1, (count / maxC) * cH);
+			ctx.fillStyle = CHOICE_LEVELS.has(c) ? "#fbbf24" : color;
+			ctx.fillRect(ox + PL + (c - 1) * bw, oy + PT + cH - bh, Math.max(1, bw - 0.5), bh);
+		}
+	}
+}
+
+function renderStackedBar(): void {
+	const ML = 28, MR = 4, MT = 8, MB = 16, BARW = 7, CHART_H = 120;
+	const allRunes = [...RUNE_TIER_ORDER, "Any"];
+	const LG_COLS = 3, LG_ROW_H = 12;
+	const LG_H = Math.ceil(allRunes.length / LG_COLS) * LG_ROW_H + 8;
+	const W = ML + 49 * BARW + MR;
+	const ctx = getVizCtx("stacked-container", W, MT + CHART_H + MB + LG_H);
+	if (!ctx) return;
+
+	let maxTotal = 0;
+	for (let c = 1; c <= 49; c++) {
+		const t = Object.values(data.counts[c] ?? {}).reduce((s, v) => s + v, 0);
+		maxTotal = Math.max(maxTotal, t);
+	}
+	if (!maxTotal) return;
+
+	ctx.fillStyle = "#1a1a2e";
+	ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+	for (const frac of [0, 0.5, 1]) {
+		const y = MT + CHART_H - Math.round(frac * CHART_H);
+		ctx.fillStyle = "#1e2a3a"; ctx.fillRect(ML, y, 49 * BARW, 1);
+		ctx.fillStyle = "#64748b"; ctx.font = "8px monospace"; ctx.textAlign = "right";
+		ctx.fillText(String(Math.round(maxTotal * frac)), ML - 2, y + 3);
+	}
+
+	ctx.fillStyle = "#64748b"; ctx.font = "9px monospace"; ctx.textAlign = "center";
+	for (let c = 1; c <= 49; c++)
+		if (c === 1 || c % 7 === 0)
+			ctx.fillText(String(c), ML + (c - 1) * BARW + BARW / 2, MT + CHART_H + MB - 2);
+
+	for (let c = 1; c <= 49; c++) {
+		const lvl = data.counts[c] ?? {};
+		let stackY = MT + CHART_H;
+		for (const rune of allRunes) {
+			const count = lvl[rune] ?? 0;
+			if (!count) continue;
+			const bh = Math.max(1, Math.round((count / maxTotal) * CHART_H));
+			stackY -= bh;
+			ctx.fillStyle = RUNE_COLORS[rune] ?? "#c084fc";
+			ctx.fillRect(ML + (c - 1) * BARW, stackY, BARW - 1, bh);
+		}
+	}
+
+	const LG_Y0 = MT + CHART_H + MB + 2;
+	const LG_ITEM_W = W / LG_COLS;
+	for (let i = 0; i < allRunes.length; i++) {
+		const rune = allRunes[i];
+		const lx = (i % LG_COLS) * LG_ITEM_W;
+		const ly = LG_Y0 + Math.floor(i / LG_COLS) * LG_ROW_H;
+		ctx.fillStyle = RUNE_COLORS[rune] ?? "#c084fc";
+		ctx.fillRect(lx + 2, ly, 8, 8);
+		ctx.fillStyle = "#94a3b8"; ctx.font = "9px sans-serif"; ctx.textAlign = "left";
+		ctx.fillText(rune, lx + 13, ly + 8);
+	}
+}
+
+function renderAll(): void {
+	renderTable();
+	renderHeatmap();
+	renderDistributionStrips();
+	renderStackedBar();
+}
+
 function exportData(): void {
 	const json = JSON.stringify(data, null, 2);
 	const blob = new Blob([json], { type: "application/json" });
@@ -936,7 +1118,7 @@ function init(): void {
 		lastSeenCharge = null;
 		saveData();
 		updateChargeDisplay();
-		renderTable();
+		renderAll();
 		setStatus("Data reset.");
 	});
 
@@ -971,7 +1153,7 @@ function init(): void {
 
 
 	updateChargeDisplay();
-	renderTable();
+	renderAll();
 
 	if (window.alt1) { setupAlt1(); return; }
 

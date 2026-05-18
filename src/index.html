@@ -28,9 +28,27 @@
 
 		<p id="stats"></p>
 
-		<div id="table-container">
-			<p class="hint">Waiting for the first Runic Attuner attunement...</p>
-		</div>
+		<details id="viz-heatmap" class="viz-section" open>
+			<summary>Heatmap</summary>
+			<div id="heatmap-container" class="viz-wrap"></div>
+		</details>
+
+		<details id="viz-strips" class="viz-section">
+			<summary>Per-rune distributions</summary>
+			<div id="strips-container" class="viz-wrap"></div>
+		</details>
+
+		<details id="viz-stacked" class="viz-section">
+			<summary>Stacked bar</summary>
+			<div id="stacked-container" class="viz-wrap"></div>
+		</details>
+
+		<details id="viz-table" class="viz-section" open>
+			<summary>Data table</summary>
+			<div id="table-container">
+				<p class="hint">Waiting for the first Runic Attuner attunement...</p>
+			</div>
+		</details>
 
 		<div id="buff-preview-section">
 			<span class="preview-label">Detected buffs:</span>
