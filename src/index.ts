@@ -387,8 +387,6 @@ function startPolling(): void {
 			if (!found) {
 				if (lastSeenRune !== null || pendingCount > 0) {
 					addDebug("Buff lost");
-					lastSeenRune = null;
-					lastSeenCharge = null;
 					pendingRune   = null;
 					pendingCharge = null;
 					pendingCount      = 0;
