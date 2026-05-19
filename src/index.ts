@@ -1283,7 +1283,7 @@ function init(): void {
 		const sel  = document.getElementById("manual-rune-select") as HTMLSelectElement | null;
 		const rune = sel?.value || lastSeenRune;
 		if (!rune) { addDebug("Log now: select a rune first"); return; }
-		const charge = lastSeenCharge ?? nextCharge();
+		const charge = nextCharge();
 		recordReading(rune, charge);
 		addDebug(`Manual log: ${rune} @ charge ${charge}`);
 	});
