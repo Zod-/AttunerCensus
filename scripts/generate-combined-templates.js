@@ -94,7 +94,7 @@ async function main() {
         const out = Buffer.alloc(TMPL_W * TMPL_H * 4, 0);
         let stableCount = 0;
 
-        for (let r = 0; r < TMPL_H; r++) {
+        for (let r = 0; r < TMPL_H - 1; r++) {   // skip bottom row (background bleed)
             for (let c = 0; c < TMPL_W; c++) {
                 const srcPx  = (r + 1) * ICON_W + (c + 1);  // +1 to skip outer 1px border
                 const dstOff = (r * TMPL_W + c) * 4;
