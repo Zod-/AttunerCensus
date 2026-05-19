@@ -58,6 +58,7 @@ function pixelStats(bufs, si) {
 }
 
 async function main() {
+    fs.rmSync(OUT_DIR, { recursive: true, force: true });
     fs.mkdirSync(OUT_DIR, { recursive: true });
 
     // ── Load per-rune templates ────────────────────────────────────────────────
