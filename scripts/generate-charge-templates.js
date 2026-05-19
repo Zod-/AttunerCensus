@@ -36,6 +36,8 @@ const TMPL_H          = 15;   // rows 12–26 → 15 rows
 const WHITE_THRESHOLD  = 190;  // R, G, B all above this → digit pixel
 const SHADOW_THRESHOLD = 80;   // R, G, B all below this → shadow pixel
 const ART_MASK_THRESH  = 0.50; // fraction of charge-0 images where a pixel must be bright to be masked
+const ALL_MASK_THRESH  = 0.90; // for runes without charge-0 images: fraction of ALL screenshots
+const ALL_MASK_MIN_IMG = 8;    // minimum screenshots required to build an all-images mask
 const DIGIT_COL0 = 2;          // leftmost column digits ever occupy
 const DIGIT_COL1 = 14;         // rightmost column digits ever occupy
 
@@ -61,7 +63,7 @@ async function main() {
     // Charge-0 = buff icon with no digit overlay, so every bright pixel is rune art.
     // Only runes where rune art is bright (passes the R/G/B > 190 threshold) need a
     // mask; runes with coloured (non-white) art produce an empty mask automatically.
-    const runeArtMasks = {}; // rune → Uint8Array(TMPL_W * TMPL_H), 1 = rune art
+    const runeArtMasks = {}; // rune → Uint8Array(TMPL_W * TMPL_H); applied at gen time + saved for runtime
     const runeNames = Object.keys(byRune).sort();
     for (const rune of runeNames) {
         const charge0Paths = (byRune[rune] ?? []).filter(p => path.basename(p).split("_")[1] === "0");
@@ -87,6 +89,45 @@ async function main() {
         console.log(`  Art mask: ${rune.padEnd(8)} — ${maskedPixels} pixels from ${charge0Paths.length} charge-0 image(s)`);
 
         // Save mask for runtime use in index.ts
+        const maskOut = Buffer.alloc(TMPL_W * TMPL_H * 4, 0);
+        for (let i = 0; i < TMPL_W * TMPL_H; i++) {
+            if (mask[i]) { maskOut[i*4] = maskOut[i*4+1] = maskOut[i*4+2] = 255; maskOut[i*4+3] = 255; }
+        }
+        await sharp(maskOut, { raw: { width: TMPL_W, height: TMPL_H, channels: 4 } })
+            .png()
+            .toFile(path.join(OUT_DIR, `${rune}.mask.data.png`));
+    }
+
+    // ── Fallback: all-images masks for runes without charge-0 screenshots ────
+    // Pixels bright in ≥ ALL_MASK_THRESH of ALL screenshots are rune art (digits
+    // appear in at most ~60% of a diverse screenshot set, well below the threshold).
+    // Applied both at template generation time AND saved for runtime readCharge() use.
+    for (const rune of runeNames) {
+        if (runtimeMasks[rune]) continue; // already have a charge-0 mask
+        const allPaths = (byRune[rune] ?? []).filter(p => path.basename(p).split("_")[1] !== "0");
+        if (allPaths.length < ALL_MASK_MIN_IMG) continue;
+
+        const buffers  = await Promise.all(allPaths.map(p => sharp(p).raw().ensureAlpha().toBuffer()));
+        const hitCount = new Int32Array(TMPL_W * TMPL_H);
+        for (const buf of buffers) {
+            for (let r = 0; r < TMPL_H; r++) {
+                for (let c = 0; c < TMPL_W; c++) {
+                    const si = ((CHARGE_ROW0 + r) * ICON_W + c) * 4;
+                    if (buf[si] > WHITE_THRESHOLD && buf[si+1] > WHITE_THRESHOLD && buf[si+2] > WHITE_THRESHOLD)
+                        hitCount[r * TMPL_W + c]++;
+                }
+            }
+        }
+        const mask = new Uint8Array(TMPL_W * TMPL_H);
+        let maskedPixels = 0;
+        for (let i = 0; i < TMPL_W * TMPL_H; i++) {
+            if (hitCount[i] / buffers.length >= ALL_MASK_THRESH) { mask[i] = 1; maskedPixels++; }
+        }
+        if (maskedPixels === 0) continue; // no persistent art detected
+
+        runeArtMasks[rune] = mask;
+        console.log(`  All-img mask: ${rune.padEnd(8)} — ${maskedPixels} pixels from ${allPaths.length} images (≥${(ALL_MASK_THRESH*100).toFixed(0)}% threshold)`);
+
         const maskOut = Buffer.alloc(TMPL_W * TMPL_H * 4, 0);
         for (let i = 0; i < TMPL_W * TMPL_H; i++) {
             if (mask[i]) { maskOut[i*4] = maskOut[i*4+1] = maskOut[i*4+2] = 255; maskOut[i*4+3] = 255; }

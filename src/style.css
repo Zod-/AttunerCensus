@@ -80,6 +80,16 @@ button:hover { background: rgba(192,132,252,.25); }
 	color: var(--muted);
 }
 
+#manual-rune-select {
+	background: var(--surface2);
+	color: var(--text);
+	border: 1px solid rgba(192,132,252,.4);
+	border-radius: 4px;
+	padding: 3px 4px;
+	font-size: 11px;
+	cursor: pointer;
+}
+
 #charge-display {
 	font-size: 15px;
 	font-weight: 700;

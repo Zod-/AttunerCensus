@@ -64,8 +64,13 @@ const RUNE_TEMPLATES = webpackImages({
 // it doesn't inflate miniWhite and skew recall toward multi-digit templates.
 // Add an entry here whenever a rune's charge-0 screenshots are captured.
 const RUNE_ART_MASKS = webpackImages({
-	Air:  require("./charge-templates/Air.mask.data.png"),
-	// Death: require("./charge-templates/Death.mask.data.png"),  // add once Death_0_*.png captured
+	Air:    require("./charge-templates/Air.mask.data.png"),
+	Body:   require("./charge-templates/Body.mask.data.png"),
+	Chaos:  require("./charge-templates/Chaos.mask.data.png"),
+	Cosmic: require("./charge-templates/Cosmic.mask.data.png"),
+	Death:  require("./charge-templates/Death.mask.data.png"),
+	Nature: require("./charge-templates/Nature.mask.data.png"),
+	Water:  require("./charge-templates/Water.mask.data.png"),
 });
 
 // ── Charge templates (25×15, white digit pixels on transparent background) ───
@@ -532,6 +537,8 @@ function startPolling(): void {
 
 				lastSeenRune   = runeName;
 				lastSeenCharge = charge;
+				const sel = document.getElementById("manual-rune-select") as HTMLSelectElement | null;
+				if (sel && !sel.value) sel.value = runeName;
 			} else if (isHeartbeat && pendingCount >= STABLE_POLLS) {
 				addDebug(`Poll ${pollCount}: holding ${runeName} charge=${charge ?? "?"}`);
 			}
@@ -1211,10 +1218,12 @@ function init(): void {
 	});
 
 	document.getElementById("log-btn")?.addEventListener("click", () => {
-		if (!lastSeenRune) { addDebug("Log now: no buff detected"); return; }
+		const sel  = document.getElementById("manual-rune-select") as HTMLSelectElement | null;
+		const rune = sel?.value || lastSeenRune;
+		if (!rune) { addDebug("Log now: select a rune first"); return; }
 		const charge = lastSeenCharge ?? nextCharge();
-		recordReading(lastSeenRune, charge);
-		addDebug(`Manual log: ${lastSeenRune} @ charge ${charge}`);
+		recordReading(rune, charge);
+		addDebug(`Manual log: ${rune} @ charge ${charge}`);
 	});
 
 	document.getElementById("save-btn")?.addEventListener("click", () => {
