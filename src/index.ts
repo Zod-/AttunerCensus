@@ -552,8 +552,10 @@ function startPolling(): void {
 				const expectedNext = lastTrackedCharge !== null
 					? (lastTrackedCharge % MAX_CHARGE) + 1
 					: null;
-				const isSequential = charge !== null && charge > 0
-					&& (expectedNext === null || charge === expectedNext);
+				const isSequential = charge !== null && (
+					(charge > 0 && (expectedNext === null || charge === expectedNext)) ||
+					(charge === 0 && lastTrackedCharge === MAX_CHARGE)
+				);
 
 				if (charge !== null && charge > 0) lastTrackedCharge = charge;
 
@@ -561,7 +563,7 @@ function startPolling(): void {
 					data.lastCharge = charge === MAX_CHARGE ? 0 : charge;
 					updateChargeDisplay();
 
-					if (charge !== lastSeenCharge && charge !== 0) {
+					if (charge !== lastSeenCharge && (charge !== 0 || lastTrackedCharge === MAX_CHARGE)) {
 						if (!inUncertainMode && !isSequential && expectedNext !== null) {
 							inUncertainMode = true;
 							const n = snapshotBuffer.length;
