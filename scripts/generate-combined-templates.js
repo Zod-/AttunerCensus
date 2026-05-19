@@ -8,12 +8,14 @@
  * the charge level.
  *
  * Background exclusion strategy:
- * - ≥2 screenshots: per-pixel variance within the group. Low-variance pixels are stable
- *   (both rune art and digit text are stable for the same charge) → included with mean color.
- * - 1 screenshot: use the existing rune template (src/templates/{Rune}.data.png) to
- *   identify non-background pixels for the rune-art region (rows 0–12), and always
- *   include the digit area (rows 13–24, cols 2–14) regardless.  This ensures single-shot
- *   templates include digit strokes while still excluding background corners.
+ * - A "round mask" is derived from the rune templates: for rows 0–12 the union of
+ *   all rune template opaque pixels gives the true circle extent per row; rows 13–24
+ *   are filled by mirroring the opposite row about the vertical centre (row 12).
+ *   Every combined template pixel that falls outside this mask is forced transparent.
+ * - ≥2 screenshots: per-pixel variance within the group additionally prunes unstable
+ *   pixels inside the circle (background bleed from screen captures).
+ * - 1 screenshot: rune template opacity identifies stable art pixels; the digit area
+ *   (rows 13–24, cols 2–14) is always included so charge strokes are present.
  *
  * Output: src/combined-templates/{Rune}_{Charge}.data.png  (25×25 RGBA)
  */
@@ -27,7 +29,6 @@ const SRC_DIR    = path.resolve(__dirname, "../src/attuner-buffs");
 const RUNE_TMPL  = path.resolve(__dirname, "../src/templates");
 const OUT_DIR    = path.resolve(__dirname, "../src/combined-templates");
 const ICON_W     = 27;
-const ICON_H     = 27;
 const TMPL_W     = 25;   // inner 25×25 (strip 1px green border each side)
 const TMPL_H     = 25;
 const VAR_THRESH = 225;  // std² < 15² → stable pixel (same as generate-templates.js)
@@ -59,15 +60,59 @@ function pixelStats(bufs, si) {
 async function main() {
     fs.mkdirSync(OUT_DIR, { recursive: true });
 
-    // ── Load per-rune templates (for single-screenshot background masking) ─────
-    // Each is a 25×25 RGBA PNG where alpha=255 means stable rune art.
+    // ── Load per-rune templates ────────────────────────────────────────────────
     const runeTemplates = {};
     for (const f of fs.readdirSync(RUNE_TMPL).filter(f => f.endsWith(".data.png"))) {
         const rune = f.replace(".data.png", "");
-        const buf  = await loadRaw(path.join(RUNE_TMPL, f));
-        runeTemplates[rune] = buf;
+        runeTemplates[rune] = await loadRaw(path.join(RUNE_TMPL, f));
     }
-    console.log(`Loaded rune templates: ${Object.keys(runeTemplates).sort().join(", ")}\n`);
+    console.log(`Loaded rune templates: ${Object.keys(runeTemplates).sort().join(", ")}`);
+
+    // ── Build round mask ───────────────────────────────────────────────────────
+    // For rows 0–12: union of all rune template opaque pixels gives the real circle
+    // extent (rune art has already been variance-masked to exclude background corners).
+    // For rows 13–24: mirror from the opposite row about the centre (row 12).
+    //   row 13 ↔ row 11, row 14 ↔ row 10, …, row 24 ↔ row 0.
+    // This fills in the bottom half where rune templates are blank (digit area
+    // was forcibly cleared by generate-templates.js).
+    const roundMask = new Uint8Array(TMPL_W * TMPL_H); // 1 = inside circle
+
+    // Step 1: union of rune templates for rows 0–12.
+    for (const buf of Object.values(runeTemplates)) {
+        for (let r = 0; r <= 12; r++) {
+            for (let c = 0; c < TMPL_W; c++) {
+                const i = r * TMPL_W + c;
+                if (buf[i * 4 + 3] === 255) roundMask[i] = 1;
+            }
+        }
+    }
+
+    // Step 2: for each row in the top half, find left/right extents, then mirror.
+    for (let r = 0; r <= 12; r++) {
+        let left = -1, right = -1;
+        for (let c = 0; c < TMPL_W; c++) {
+            if (roundMask[r * TMPL_W + c]) { if (left === -1) left = c; right = c; }
+        }
+        if (left === -1) continue; // no data for this row
+
+        const mirrorRow = 24 - r; // row 0 ↔ row 24, row 12 ↔ row 12
+        for (let c = left; c <= right; c++) {
+            roundMask[mirrorRow * TMPL_W + c] = 1;
+        }
+    }
+
+    // Print mask shape for reference.
+    let maskPx = 0;
+    for (let r = 0; r < TMPL_H; r++) {
+        let row = "";
+        for (let c = 0; c < TMPL_W; c++) {
+            const inMask = roundMask[r * TMPL_W + c];
+            row += inMask ? "#" : ".";
+            if (inMask) maskPx++;
+        }
+        console.log("  " + row);
+    }
+    console.log(`  Round mask: ${maskPx} pixels inside circle\n`);
 
     // ── Group screenshots ──────────────────────────────────────────────────────
     const files = fs.readdirSync(SRC_DIR).filter(f => f.endsWith(".png"));
@@ -96,29 +141,27 @@ async function main() {
 
         for (let r = 0; r < TMPL_H - 1; r++) {   // skip bottom row (background bleed)
             for (let c = 0; c < TMPL_W; c++) {
+                const i      = r * TMPL_W + c;
+                if (!roundMask[i]) continue;        // outside circular icon → skip
+
                 const srcPx  = (r + 1) * ICON_W + (c + 1);  // +1 to skip outer 1px border
-                const dstOff = (r * TMPL_W + c) * 4;
+                const dstOff = i * 4;
                 const si     = srcPx * 4;
 
                 let stable, mR, mG, mB;
 
                 if (useVariance) {
-                    // Multi-image: variance determines stability.
-                    // Both rune art AND digit strokes for this charge are stable → included.
                     const ps = pixelStats(bufs, si);
                     stable   = ps.stable;
                     mR = ps.mR; mG = ps.mG; mB = ps.mB;
                 } else {
-                    // Single image: use the rune template to identify background for
-                    // non-digit rows; always include digit-area pixels.
                     const inDigitArea = r >= DIGIT_ROW0 && c >= DIGIT_COL0 && c <= DIGIT_COL1;
                     if (inDigitArea) {
-                        stable = true;  // always include digit area
+                        stable = true;
                     } else if (runeTmpl) {
-                        const ti = (r * TMPL_W + c) * 4;
-                        stable = runeTmpl[ti + 3] === 255;  // opaque in rune template = stable art
+                        stable = runeTmpl[dstOff + 3] === 255;
                     } else {
-                        stable = false;  // no rune template → skip
+                        stable = false;
                     }
                     mR = bufs[0][si]; mG = bufs[0][si + 1]; mB = bufs[0][si + 2];
                 }
