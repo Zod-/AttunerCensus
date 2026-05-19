@@ -103,7 +103,7 @@ async function main() {
     // appear in at most ~60% of a diverse screenshot set, well below the threshold).
     // Applied both at template generation time AND saved for runtime readCharge() use.
     for (const rune of runeNames) {
-        if (runtimeMasks[rune]) continue; // already have a charge-0 mask
+        if (runeArtMasks[rune]) continue; // already have a charge-0 mask
         const allPaths = (byRune[rune] ?? []).filter(p => path.basename(p).split("_")[1] !== "0");
         if (allPaths.length < ALL_MASK_MIN_IMG) continue;
 

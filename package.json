@@ -2,7 +2,7 @@
 	"name": "runic-attuner-tracker",
 	"version": "1.0.0",
 	"scripts": {
-		"prebuild": "node scripts/generate-icon.js && node scripts/download-rune-images.js && node scripts/generate-templates.js && node scripts/generate-charge-templates.js",
+		"prebuild": "node scripts/generate-icon.js && node scripts/download-rune-images.js && node scripts/generate-templates.js && node scripts/generate-charge-templates.js && node scripts/generate-combined-templates.js",
 		"build": "webpack",
 		"watch": "webpack --watch",
 		"serve": "node scripts/serve.js"
