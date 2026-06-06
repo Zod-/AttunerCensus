@@ -244,6 +244,61 @@ async function main() {
         console.log(`  charge ${String(charge).padStart(2)}: ${String(buffers.length).padStart(2)} image(s), ${String(whitePixels).padStart(3)} white + ${String(shadowPixels).padStart(3)} shadow → ${charge}.data.png  [${runesHere}]${maskNote}`);
     }
 
+    // ── Full rune-art masks (25×25) ──────────────────────────────────────────
+    // Composite: copy the existing 25×25 rune template (stable colored pixels
+    // outside the digit rectangle) then fill the transparent digit rectangle
+    // (rows 13–24, cols 2–14) with mean pixel values from charge-0 images.
+    // If no charge-0 images exist for a rune, fall back to all-image means.
+    // Output: src/charge-templates/{Rune}.fullmask.data.png
+    const TMPL_SRC_DIR     = path.resolve(__dirname, "../src/templates");
+    const FULL_DIGIT_ROW0  = 13;   // first template row of the digit rectangle
+    const FULL_DIGIT_COL0  = 2;    // leftmost template col
+    const FULL_DIGIT_COL1  = 14;   // rightmost template col
+    const FULL_W = 25, FULL_H = 25;
+
+    console.log("\nGenerating full rune-art masks (25×25)...");
+    const allRunes = Object.keys(byRune)
+        .filter(r => fs.existsSync(path.join(TMPL_SRC_DIR, `${r}.data.png`)))
+        .sort();
+
+    for (const rune of allRunes) {
+        const tmplPath = path.join(TMPL_SRC_DIR, `${rune}.data.png`);
+        const tmplBuf  = await sharp(tmplPath).raw().ensureAlpha().toBuffer();
+        const out      = Buffer.from(tmplBuf); // mutable copy of template
+
+        // Choose fill source: charge-0 images preferred, else all images
+        const charge0Paths = (byRune[rune] ?? []).filter(p => path.basename(p).split("_")[1] === "0");
+        const fillPaths    = charge0Paths.length > 0
+            ? charge0Paths
+            : (byRune[rune] ?? []);
+
+        if (fillPaths.length > 0) {
+            const buffers = await Promise.all(fillPaths.map(p => sharp(p).raw().ensureAlpha().toBuffer()));
+            for (let r = FULL_DIGIT_ROW0; r < FULL_H; r++) {
+                for (let c = FULL_DIGIT_COL0; c <= FULL_DIGIT_COL1; c++) {
+                    const dstOff = (r * FULL_W + c) * 4;
+                    if (out[dstOff + 3] !== 0) continue; // already opaque — keep template pixel
+                    // Icon position: template[r][c] → icon[r+1][c+1]
+                    const iconRow = r + 1, iconCol = c + 1;
+                    let sumR = 0, sumG = 0, sumB = 0;
+                    for (const buf of buffers) {
+                        const si = (iconRow * ICON_W + iconCol) * 4;
+                        sumR += buf[si]; sumG += buf[si + 1]; sumB += buf[si + 2];
+                    }
+                    out[dstOff]     = Math.round(sumR / buffers.length);
+                    out[dstOff + 1] = Math.round(sumG / buffers.length);
+                    out[dstOff + 2] = Math.round(sumB / buffers.length);
+                    out[dstOff + 3] = 255;
+                }
+            }
+        }
+
+        const outPath = path.join(OUT_DIR, `${rune}.fullmask.data.png`);
+        await sharp(out, { raw: { width: FULL_W, height: FULL_H, channels: 4 } }).png().toFile(outPath);
+        const src = charge0Paths.length > 0 ? `${charge0Paths.length} charge-0` : `${fillPaths.length} all-img`;
+        console.log(`  Full mask: ${rune.padEnd(8)} — digit rect filled from ${src} image(s)`);
+    }
+
     console.log(`\nDone — templates written to ${path.relative(process.cwd(), OUT_DIR)}`);
 }
 
