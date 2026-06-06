@@ -1,5 +1,5 @@
 {
-	"appName": "Runic Attuner Tracker",
+	"appName": "Attuner Census",
 	"description": "Tracks rune frequency per charge level for the Runic Attuner",
 	"appUrl": "./index.html",
 	"configUrl": "./appconfig.json",

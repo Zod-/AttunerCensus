@@ -8,7 +8,7 @@ module.exports = {
 	},
 	output: {
 		path: path.resolve(__dirname, "dist"),
-		library: { type: "umd", name: "RunicAttuner" }
+		library: { type: "umd", name: "AttunerCensus" }
 	},
 	devtool: false,
 	mode: "development",

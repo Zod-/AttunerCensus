@@ -1,6 +1,7 @@
 {
-	"name": "runic-attuner-tracker",
+	"name": "attuner-census",
 	"version": "1.0.0",
+	"license": "MIT",
 	"scripts": {
 		"prebuild": "node scripts/generate-icon.js && node scripts/download-rune-images.js && node scripts/generate-templates.js && node scripts/generate-charge-templates.js && node scripts/generate-combined-templates.js",
 		"build": "webpack",

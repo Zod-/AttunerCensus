@@ -64,4 +64,4 @@ Files are named `{Rune}_{charge}_{n}.png`, e.g. `Death_13_2.png`. Special case: 
 
 ### Build Output
 
-Webpack bundles everything to `dist/main.js` (UMD, name `RunicAttuner`). The `appconfig.json` manifest declares `pixel` and `overlay` Alt1 permissions and a default window of 420×620px.
+Webpack bundles everything to `dist/main.js` (UMD, name `AttunerCensus`). The `appconfig.json` manifest declares `pixel` and `overlay` Alt1 permissions and a default window of 420×620px.
