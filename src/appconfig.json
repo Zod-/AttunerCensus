@@ -3,7 +3,7 @@
 	"description": "Tracks rune frequency per charge level for the Runic Attuner",
 	"appUrl": "./index.html",
 	"configUrl": "./appconfig.json",
-	"iconUrl": "./icon.png",
+	"iconUrl": "./Runic_attuner.png",
 	"defaultWidth": 420,
 	"defaultHeight": 620,
 	"minWidth": 320,

@@ -4,15 +4,27 @@
 	<meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 	<title>Runic Attuner Tracker</title>
+	<link rel="icon" href="./Runic_attuner.png">
 </head>
 <body>
 	<div id="app">
 		<header>
+			<img src="./Runic_attuner.png" id="app-icon" alt="">
 			<h1>Runic Attuner Tracker</h1>
 			<p id="status">Initializing...</p>
 		</header>
 
+		<div id="buff-preview-section">
+			<div id="buff-previews"></div>
+			<div id="preview-debug-wrap">
+				<canvas id="preview-debug-rune" width="162" height="54" class="debug-preview-canvas" title="Icon · Rune template+charge · Rune diff+charge diff"></canvas>
+				<div id="preview-charge-label"></div>
+			</div>
+		</div>
+
 		<div id="controls">
+			<button id="import-btn">Import JSON</button>
+			<input id="import-file" type="file" accept=".json" style="display:none">
 			<button id="export-btn">Export JSON</button>
 			<button id="reset-btn">Reset Data</button>
 		</div>
@@ -48,13 +60,18 @@
 		<p id="stats"></p>
 
 		<details id="viz-heatmap" class="viz-section" open>
-			<summary>Heatmap</summary>
-			<div id="heatmap-container" class="viz-wrap"></div>
-		</details>
-
-		<details id="viz-strips" class="viz-section">
-			<summary>Per-rune distributions</summary>
-			<div id="strips-container" class="viz-wrap"></div>
+			<summary>Rune distributions</summary>
+			<div class="viz-row">
+				<div id="heatmap-container" class="viz-wrap"></div>
+				<div id="totals-bar-container" class="viz-wrap"></div>
+			</div>
+			<div class="viz-row">
+				<div id="strips-container" class="viz-wrap"></div>
+				<div class="viz-col">
+					<div id="totals-donut-container" class="viz-wrap"></div>
+					<div id="totals-treemap-container" class="viz-wrap"></div>
+				</div>
+			</div>
 		</details>
 
 		<details id="viz-stacked" class="viz-section">
@@ -68,11 +85,6 @@
 				<p class="hint">Waiting for the first Runic Attuner attunement...</p>
 			</div>
 		</details>
-
-		<div id="buff-preview-section">
-			<span class="preview-label">Detected buffs:</span>
-			<div id="buff-previews"></div>
-		</div>
 
 		<details id="debug-section">
 			<summary>Debug log <span id="poll-count"></span></summary>
@@ -92,6 +104,10 @@
 				<div>
 					<div class="debug-canvas-label">Rune match (green=pass, red=fail, yellow=skipped)</div>
 					<canvas id="debug-rune-diff" width="100" height="100"></canvas>
+				</div>
+				<div>
+					<div class="debug-canvas-label">Full rune-art mask</div>
+					<canvas id="debug-full-mask" width="100" height="100"></canvas>
 				</div>
 			</div>
 			<div id="debug-canvas-row">

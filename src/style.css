@@ -31,6 +31,20 @@ html, body {
 	min-width: 320px;
 }
 
+header {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+
+#app-icon {
+	width: 32px;
+	height: 32px;
+	image-rendering: pixelated;
+	flex-shrink: 0;
+}
+
 header h1 {
 	font-size: 15px;
 	font-weight: 700;
@@ -132,9 +146,25 @@ button:hover { background: rgba(192,132,252,.25); }
 	box-shadow: 0 0 4px rgba(192,132,252,.5);
 }
 
-.preview-label {
-	font-size: 9px;
+.debug-preview-canvas {
+	height: 54px;
+	image-rendering: pixelated;
+	border: 1px solid rgba(255,255,255,.1);
+	border-radius: 4px;
+	background: #0a0a12;
+}
+
+#preview-debug-wrap {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+#preview-charge-label {
+	font-size: 10px;
+	font-family: monospace;
 	color: var(--muted);
+	min-height: 13px;
 }
 
 /* ── Stats ─────────────────────────────────────────────────── */
@@ -174,9 +204,22 @@ button:hover { background: rgba(192,132,252,.25); }
 
 .viz-section[open] > summary::before { transform: rotate(90deg); }
 
+.viz-row {
+	display: flex;
+	align-items: flex-start;
+	overflow-x: auto;
+}
+
+.viz-col {
+	display: flex;
+	flex-direction: column;
+	flex-shrink: 0;
+}
+
 .viz-wrap {
 	overflow-x: auto;
 	background: var(--bg);
+	flex-shrink: 0;
 }
 
 canvas.viz-canvas { display: block; }
